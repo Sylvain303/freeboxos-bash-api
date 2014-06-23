@@ -1,6 +1,19 @@
 freeboxos-bash-api
 ==================
 
+Fork de : https://github.com/JrCs/freeboxos-bash-api
+
+Une traduction de la documentation en Français sera disponible. Ce fork ajoute des fonctionnalités, et utilise un parser
+JSON différent [jq](http://stedolan.github.io/jq/manual/) au lieu de [JSON.sh](https://github.com/dominictarr/JSON.sh),
+pour des raisons de performances.
+
+Vous pouvez piper le json dans `| jq .` pour un joli formatage du JSON.
+
+Regarder le code pour une version à jour de la doc…
+
+La documentation originale en Anglais :
+
+
 Access [FreeboxOS API](http://dev.freebox.fr/sdk/os/#api-list) from bash
 
 Quick Start
@@ -11,6 +24,9 @@ You need to have `curl` and `openssl` installed.
 Get the source:
 
     $ curl -L http://github.com/JrCs/freeboxos-bash-api/raw/master/freeboxos_bash_api.sh > freeboxos_bash_api.sh
+
+
+http://stedolan.github.io/jq/manual/
 
 Example
 -------
@@ -30,7 +46,7 @@ login_freebox "$MY_APP_ID" "$MY_APP_TOKEN"
 answer=$(call_freebox_api '/connection/xdsl')
 
 # extract max upload xDSL rate
-up_max_rate=$(get_json_value_for_key "$up_xdsl" 'result.up.maxrate')
+up_max_rate=$(get_json_value_for_key "$answer" 'result.up.maxrate')
 
 echo "Max Upload xDSL rate: $up_max_rate kbit/s"
 ```
@@ -115,4 +131,26 @@ The application must be granted to modify the setup of the freebox (from freebox
 ##### Example
 ```bash
 reboot_freebox
+```
+
+Available Commands
+------------------
+
+```bash
+fb_help : list all available commands
+fb_ls   : create ls_cache and list remote file with call_freebox_api 'fs/ls/'
+fb_list_dl : list download in json format caching the résult -f to force cache reload
+```
+
+JQ hack
+-------
+
+embedded grep: fisrt list names matching 'fred' and reselect the whole json result
+```bash
+jq ".result[] | select(.name == $(jq '.result[] | .name '  < dl.json  | grep -i fred))" dl.json
+```
+
+finished downloads
+```bash
+fb_list_dl | jq '.result[] | select(.pct_compl >= 100)
 ```

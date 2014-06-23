@@ -1,171 +1,118 @@
 #!/bin/bash
+#
+# Repostitory: https://github.com/Sylvain303/freeboxos-bash-api
+# Forked from: https://github.com/JrCs/freeboxos-bash-api
+#
+# Usage:
+#
+# ==== ### NOTE ### ==== >>> 
+# The script will WRITE file in its own dir:
+# - auth.sh   : [DOESN'T WORK YET] after the authorize process, store SAVED_APP_ID and SAVED_APP_TOKEN
+# - resty     : a rest bash API downloaded bellow
+# - cache_fs/ : a remote freebox HD folder cache used by fb_ls
+#
+# First: Call once the following registration step, requiring approval on the freebox
+# LCD screen:
+#
+# $ source ./freeboxos_bash_api.sh
+# $ authorize_application  'MyWonderfull.app'  \
+# 	'My Wonderfull App'  '1.0.0'  'xubuntu-laptop'
+#
+# After the registration store the MY_APP_ID and MY_APP_TOKEN outputed by the 
+# registration process. It will be required to authenticate again.
+#
+# You can modify this code to record the value bellow, See SAVED_APP_ID SAVED_APP_TOKEN
+#
+# Normal registered usage:
+#
+# $ source ./freeboxos_bash_api.sh
+# $ MY_APP_ID="MyWonderfull.app"
+# $ MY_APP_TOKEN="long string full of random char returned by the box above"
+# $ login_freebox "$MY_APP_ID" "$MY_APP_TOKEN"
+#
+# After authentication the session is holded by the box during few mins. You 
+# can issue API command directly
+#
+# List the root of the box displaying connected and internal harddrive:
+# $ call_freebox_api 'fs/ls/' 
 
+### Config
 FREEBOX_URL="http://mafreebox.freebox.fr"
 _API_VERSION=
 _API_BASE_URL=
 _SESSION_TOKEN=
 
-######## GLOBAL VARIABLES ########
-_JSON_DATA=
-_JSON_DECODE_DATA_KEYS=
-_JSON_DECODE_DATA_VALUES=
+# can be modified here or in the external file auth.sh (not under source control) 
+SAVED_APP_ID=""
+SAVED_APP_TOKEN=""
 
-case "$OSTYPE" in
-    darwin*) SED_REX='-E' ;;
-    *) SED_REX='-r' ;;
-esac
+# external tools required
+downloads="
+http://github.com/micha/resty/raw/master/resty::resty
+apt-get==intstall==jq::jq
+"
+# alternative bash parser for json, but slower.
+#https://raw.githubusercontent.com/dominictarr/JSON.sh/master/JSON.sh::JSON
 
-if echo "test string" | egrep -ao --color=never "test" &>/dev/null; then
-    GREP='egrep -ao --color=never'
-else
-    GREP='egrep -ao'
+# Tools
+# resty: a rest bash shortcut wrapper for curl
+RESTY=resty
+# a realy fast binary JSON parser
+JQ=jq
+
+script_dir=$(dirname $0)
+PATH=$PATH:$script_dir
+
+# loop over the subscript to download
+for cmd in $downloads
+do
+	url=${cmd%%::*}
+	exe=${cmd##*::}
+	#echo $cmd $url $exe
+	path=$(type -P "$exe")
+	if [[ "$path" != "" ]]
+	then
+		echo "$exe is in PATH"
+		# ${var^^} make it UPPERCASE bash 4
+		eval "${exe^^}=$path"
+
+	else
+		echo "$exe is NOT in PATH"
+		if [[ $url =~ ^http ]]
+		then
+			echo "downloading url in '$script_dir' $url"
+			path=$script_dir/$exe
+			curl -L "$url" > $path
+			chmod a+x $path
+			eval "${exe^^}=$path"
+		else 
+			# don't perform install but notice the user
+			echo "to install $exe use: $(echo "$url" | sed -e 's/==/ /g')"
+			eval "${exe^^}=''"
+		fi
+	fi
+done
+
+# test the json parser
+if [[ "$JQ" == "" ]]
+then
+	echo some error no JSON parser found.
+	return 1
 fi
 
 ######## FUNCTIONS ########
 
-######## FUNCTIONS FROM JSON.SH ########
-# This is from https://github.com/dominictarr/JSON.sh
-# See LICENSE for more info.
-
-_throw () {
-    echo "$*" >&2
-    exit 1
-}
-
-_tokenize_json () {
-    local ESCAPE='(\\[^u[:cntrl:]]|\\u[0-9a-fA-F]{4})'
-    local CHAR='[^[:cntrl:]"\\]'
-    local STRING="\"$CHAR*($ESCAPE$CHAR*)*\""
-    # The Freebox api don't put quote between string values
-    # STRING2 solve this problem
-    local STRING2="[^:,][a-zA-Z][a-zA-Z0-9_-]*[^],}]"
-    local NUMBER='-?(0|[1-9][0-9]*)([.][0-9]*)?([eE][+-]?[0-9]*)?'
-    local KEYWORD='null|false|true'
-    local SPACE='[[:space:]]+'
-
-    $GREP "$STRING|$STRING2|$NUMBER|$KEYWORD|$SPACE|." | egrep -v "^$SPACE$"
-    # " Fix xemacs fontification
-}
-
-_parse_array () {
-    local index=0
-    local ary=''
-    read -r token
-    case "$token" in
-        ']') ;;
-        *)
-           while : ; do
-               _parse_value "${1%*.}" "[$index]."
-               index=$((index+1))
-               ary="$ary""$value"
-               read -r token
-               case "$token" in
-                   ']') break ;;
-                   ',') ary="$ary," ;;
-                   *) _throw "EXPECTED , or ] GOT ${token:-EOF}" ;;
-               esac
-               read -r token
-           done
-           ;;
-    esac
-    value=$(printf '[%s]' "$ary")
-}
-
-_parse_object () {
-    local key
-    local obj=''
-    read -r token
-    case "$token" in
-        '}') ;;
-        *)
-           while : ; do
-               case "$token" in
-                   '"'*'"') key=$token;;
-                   *) _throw "EXPECTED string GOT ${token:-EOF}" ;;
-               esac
-               read -r token
-               case "$token" in
-                   ':') ;;
-                   *) _throw "EXPECTED : GOT ${token:-EOF}" ;;
-               esac
-               read -r token
-               _parse_value "$1" "$key"
-               obj="$obj$key:$value"
-               read -r token
-               case "$token" in
-                   '}') break ;;
-                   ',') obj="$obj," ;;
-                   *) _throw "EXPECTED , or } GOT ${token:-EOF}" ;;
-               esac
-               read -r token
-           done
-           ;;
-    esac
-    value=$(printf '{%s}' "$obj")
-}
-
-_parse_value () {
-    local jpath="${1:-}${2:-}"
-    case "$token" in
-        '{') _parse_object "$jpath" ;;
-        '[') _parse_array  "$jpath";;
-        # At this point, the only valid single-character tokens are digits.
-        ''|[!0-9]) _throw "EXPECTED value GOT ${token:-EOF}" ;;
-        *) value=$token ;;
-    esac
-    [ "${value:-}" = '' ] && return
-    jpath=${jpath//\"\"/.}
-    jpath=${jpath//\"/}
-    local key="${jpath%*.}"
-    [[ "$key" = '' ]] && return
-    _JSON_DECODE_DATA_KEYS+=("$key")
-    value=${value#\"}  # Remove leading "
-    value=${value%*\"} # Remove trailing "
-    value=${value//\\\///} # convert \/ to /
-    _JSON_DECODE_DATA_VALUES+=("$value")
-}
-
-_parse_json () {
-    read -r token
-    _parse_value
-    read -r token
-    case "$token" in
-        '') ;;
-        *) _throw "EXPECTED EOF GOT $token" ;;
-    esac
-}
-
-######## END OF FUNCTIONS FROM JSON.SH ########
-
-function _parse_and_cache_json {
-    if [[ "$_JSON_DATA" != "$1" ]]; then
-        _JSON_DATA="$1"
-        _JSON_DECODE_DATA_KEYS=("")
-        _JSON_DECODE_DATA_VALUES=("")
-        _parse_json < <(echo "$_JSON_DATA" | _tokenize_json)
-    fi
-}
-
+# read the json for the key in $2, "$1" hold the full json string
 function get_json_value_for_key {
-    _parse_and_cache_json "$1"
-    local key i=1 max_index=${#_JSON_DECODE_DATA_KEYS[@]};
-    while [[ $i -lt $max_index ]]; do
-        if [[ "${_JSON_DECODE_DATA_KEYS[$i]}" = "$2" ]]; then
-            echo ${_JSON_DECODE_DATA_VALUES[$i]}
-            return 0
-        fi
-        ((i++))
-    done
-    return 1
-}
-
-function dump_json_keys_values {
-    _parse_and_cache_json "$1"
-    local key i=1 max_index=${#_JSON_DECODE_DATA_KEYS[@]};
-    while [[ $i -lt $max_index ]]; do
-        printf "%s = %s\n" "${_JSON_DECODE_DATA_KEYS[$i]}" "${_JSON_DECODE_DATA_VALUES[$i]}"
-        ((i++))
-    done
+	local r=$(echo "$1" | jq -r ".$2")	
+	if [[ "$r" == "null" ]]
+	then
+		echo ""
+		return 1
+	fi
+	echo "$r"
+	# echo "debug:$2 = '$r'" >> log
+	return 0
 }
 
 function _check_success {
@@ -183,11 +130,14 @@ function _check_freebox_api {
     _API_BASE_URL=$(get_json_value_for_key "$answer" api_base_url)
 }
 
+# call API directly as specified in http://dev.freebox.fr/sdk/os/
+# global $answer is modified
 function call_freebox_api {
     local api_url="$1"
     local data="${2-}"
     local options=("")
-    local url="$FREEBOX_URL"$( echo "/$_API_BASE_URL/v$_API_VERSION/$api_url" | sed 's@//@/@g')
+	# remove mutltiple slashes
+	local url="${FREEBOX_URL}$(echo "${_API_BASE_URL}v${_API_VERSION}/$api_url" | sed 's@/\+@/@g')"
     [[ -n "$_SESSION_TOKEN" ]] && options+=(-H "X-Fbx-App-Auth: $_SESSION_TOKEN")
     [[ -n "$data" ]] && options+=(-d "$data")
     answer=$(curl -s "$url" "${options[@]}")
@@ -205,6 +155,10 @@ function login_freebox {
     local password=$(echo -n "$challenge" | openssl dgst -sha1 -hmac "$APP_TOKEN" | sed  's/^(stdin)= //')
     answer=$(call_freebox_api '/login/session/' "{\"app_id\":\"${APP_ID}\", \"password\":\"${password}\" }") || return 1
     _SESSION_TOKEN=$(get_json_value_for_key "$answer" "result.session_token")
+	echo "login successful"
+	echo "SESSION_TOKEN='$_SESSION_TOKEN'"
+	echo "resty_H='X-Fbx-App-Auth: $_SESSION_TOKEN'"
+	resty_H="X-Fbx-App-Auth: $_SESSION_TOKEN"
 }
 
 function authorize_application {
@@ -229,16 +183,229 @@ function authorize_application {
     [[ "$status" != 'granted' ]] && return 1
     echo >&2
     cat <<EOF
+# TODO: Save it as auth.sh replace MY_ by SAVED_
 MY_APP_ID="$APP_ID"
 MY_APP_TOKEN="$app_token"
 EOF
 }
 
+# short cut function which fetch data in $answer and export its value in the variable of
+# the same name. For mutiple subkey export the last part.
+# short version of:
+# local loged_in=$(get_json_value_for_key "$answer" "result.logged_in")
+jq_get()
+{
+	local varname=$1
+	if [[ "$1" =~ \. ]]
+	then
+		varname=${1##*.}
+	fi
+	eval "$varname=\"$(echo "$answer" | jq -r ".result | .$1")\""
+}
+
+function fb_check_session() {
+	answer=$(call_freebox_api login/)
+	#local loged_in=$(get_json_value_for_key "$answer" "result.logged_in")
+	##echo loged_in=$loged_in
+	#unset loged_in
+	jq_get logged_in
+	echo logged_in?=$logged_in
+	if [[ "$logged_in" == "false" ]]
+	then
+		if [ -f $script_dir/auth.sh ]
+		then
+			source $script_dir/auth.sh
+		fi
+		login_freebox "$SAVED_APP_ID" "$SAVED_APP_TOKEN"
+	fi
+}
+
+######## API free box tools  ########
+
 function reboot_freebox {
     call_freebox_api '/system/reboot' '{}' >/dev/null
+}
+
+DLCACHE=$script_dir/dl.json
+fb_dl_build_cache() {
+	call_freebox_api 'downloads/' | jq . > $DLCACHE
+}
+
+function fb_list_dl() {
+	#dlcache=$(mktemp fbtmp_XXXXX_dl.json)
+	if [ ! -f $DLCACHE -o "$1" == "-f" ]
+	then
+		echo "rebuild cache : api call downloads"
+		fb_dl_build_cache
+	fi
+
+	count=$(jq '.result[].id' $DLCACHE | wc -l)
+
+	# this output is json compatible so it can be piped back into jq, .result[], .dowloads
+	jq "{ result: [ .result[] | 
+		  { name,
+			size_MB : (.size / 1048576),
+			pct_compl : (.tx_pct / 100),
+			ratio : (.tx_bytes / .size),
+			stop_ratio : (.stop_ratio / 100),
+		    id, status, error 
+		  }
+		  ],
+		downloads : $count }" \
+		$DLCACHE
+
+}  
+
+# helper apply and rewrap the result with a .result[] selector
+function jq_filter_wrap() {
+	jq "{result: [ .result[] | $1 ] }"
+}
+
+# ###################### ====>  useful jq combo <=================== ###################
+# finished downloads : fb_list_dl | jq '.result[] | select(.pct_compl >= 100)
+# list download_dir or cat path : jq -r '.result[] | if .download_dir == "L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv" then "L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv" + (.name | @base64)  else .download_dir end' < dl.json
+
+function fb_dl_grep() {
+	# grep inside the downloads
+	local r=$(jq '.result[] | .name ' < $DLCACHE  | grep -i "$1")
+	if [[ "$r" == "" ]]
+	then
+		echo "not found: '$1'"
+	else
+		fb_list_dl | jq ".result[] | select(.name == $r)"
+	fi
+}
+
+fb_ls() {
+	# cache_dir is a folder tree stored localy to allow bash file name completion
+	# each dir as a .path file storing it base64 freebox path
+	cache_dir=$script_dir/cache_fs
+	LS_JSON=$script_dir/ls.json
+	[ ! -d $cache_dir ] && mkdir $cache_dir
+
+	# split on newline only
+	OLDIFS=$IFS
+	IFS=$'\n'
+	i=-1
+
+	local base64path=''
+	if [[ "$1" != "" ]]
+	then
+		if [ -d "$1" ]
+		then
+			base64path=$(cat "$1/.path")
+			echo "base64path=$base64path"
+		else
+			base64path=$1
+		fi
+	fi
+
+	call_freebox_api fs/ls/$base64path > $LS_JSON
+	for d in $(jq -r '.result[].name' $LS_JSON)
+	do 
+		i=$(( $i + 1 ))
+		echo "$i:< $d >"
+		if [[ $d == '.' || $d == '..' ]]
+		then
+			continue
+		fi
+
+		# extract the json for the folder with prefix .result
+		answer=$(jq "{result : .result[$i] }" $LS_JSON)
+
+		jq_get type
+		#echo "type=$type"
+		if [[ $type == "dir" ]]
+		then 
+			jq_get path
+			lpath="$cache_dir/$(echo "$path" | base64 -d)"
+			#echo $lpath
+			mkdir -p "$lpath"
+			echo "$path" > "$lpath/.path"
+		fi
+	done
+
+	IFS=$OLDIFS
+}
+
+fb_get_dl_hash() {
+	jq -r ".result[] | select(.id == $1) | .download_dir" < $DLCACHE
+}
+
+fb_test_file() {
+	local base64path=''
+	if [[ "$1" == "-b" ]]
+	then
+		base64path="$2"
+	# # following test detects base64 but it involves 2 subcommands
+	# elif [[ $(echo "$1" | base64 -d | base64 -w0) == "$1" ]]
+	# then
+	# 	base64path="$1"
+	else
+		base64path=$(echo -n "$1" | base64 -w0)
+	fi
+	answer=$(call_freebox_api fs/info/$base64path)
+}
+
+fb_dl_check_file() {
+	# encoded base64 /Disque dur/Téléchargements
+	local t=L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv
+	local tot=0
+	local ok=0
+	local delete=false
+
+	fb_dl_build_cache
+
+	if [[ "$1" == "--delete" ]]
+	then
+		delete=true
+		shift
+	fi
+
+	for id in $(jq -r '.result[] | .id' < $DLCACHE )
+	do 
+		base64path=$(jq -r ".result[] | select(.id == $id) | if .download_dir == \"$t\" then \"$t\" + (.name | @base64)  else .download_dir end" < $DLCACHE)
+
+		#echo "id=$id base64path=$base64path"
+		tot=$(($tot + 1))
+
+		if ! fb_test_file -b "$base64path" 2> /dev/null
+		then
+			# it is not always true because some filename are wrong
+			# lets try the same path but the interal filename
+			answer=$(call_freebox_api downloads/$id/files)
+			jq_get '[0].name'
+			if [[ "$name" == "" ]]
+			then
+				echo "$answer" | jq .
+				return 1
+			fi
+			fullpath=$(echo -n "$base64path" | base64 -d)
+			test_fname="$(dirname "$fullpath")/$name"
+			if ! fb_test_file "$test_fname" 2> /dev/null
+			then
+				echo "id:$id not found: '$fullpath'"
+				echo "test_fname=$test_fname"
+
+				if $delete
+				then
+					DELETE ${_API_BASE_URL}v${_API_VERSION}/downloads/$id/erase
+				fi
+			else
+				ok=$(($ok + 1))
+			fi
+		else
+			ok=$(($ok + 1))
+		fi
+	done
+
+	echo "ok=$ok/$tot"
 }
 
 ######## MAIN ########
 
 # fill _API_VERSION and _API_BASE_URL variables
 _check_freebox_api
+source $RESTY
+fb_check_session
+resty $FREEBOX_URL -H "$resty_H"
