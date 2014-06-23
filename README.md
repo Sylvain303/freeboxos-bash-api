@@ -19,14 +19,14 @@ Access [FreeboxOS API](http://dev.freebox.fr/sdk/os/#api-list) from bash
 Quick Start
 -----------
 
-You need to have `curl` and `openssl` installed.
+You need to have `curl`, `openssl` and `jq` installed.
 
 Get the source:
 
     $ curl -L http://github.com/JrCs/freeboxos-bash-api/raw/master/freeboxos_bash_api.sh > freeboxos_bash_api.sh
 
 
-http://stedolan.github.io/jq/manual/
+JQ : http://stedolan.github.io/jq/manual/
 
 Example
 -------
@@ -152,5 +152,5 @@ jq ".result[] | select(.name == $(jq '.result[] | .name '  < dl.json  | grep -i 
 
 finished downloads
 ```bash
-fb_list_dl | jq '.result[] | select(.pct_compl >= 100)
+fb_list_dl | jq '.result[] | select(.pct_compl >= 100)'
 ```
