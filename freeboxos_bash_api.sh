@@ -5,10 +5,10 @@
 #
 # Usage:
 #
-# ==== ### NOTE ### ==== >>> 
+# ==== ### NOTE ### ==== >>>
 # The script will WRITE file in its own dir:
-# - auth.sh   : [DOESN'T WORK YET] after the authorize process, store SAVED_APP_ID and SAVED_APP_TOKEN
-# - resty     : a rest bash API downloaded bellow
+# - auth.sh   : [DOESN'T WORK YET] after the authorize process, store SAVED_APP_ID and SAVED_APP_TOKEN
+# - resty     : a rest bash API downloaded bellow
 # - cache_fs/ : a remote freebox HD folder cache used by fb_ls
 #
 # First: Call once the following registration step, requiring approval on the freebox
@@ -18,7 +18,7 @@
 # $ authorize_application  'MyWonderfull.app'  \
 # 	'My Wonderfull App'  '1.0.0'  'xubuntu-laptop'
 #
-# After the registration store the MY_APP_ID and MY_APP_TOKEN outputed by the 
+# After the registration store the MY_APP_ID and MY_APP_TOKEN outputed by the
 # registration process. It will be required to authenticate again.
 #
 # You can modify this code to record the value bellow, See SAVED_APP_ID SAVED_APP_TOKEN
@@ -30,11 +30,11 @@
 # $ MY_APP_TOKEN="long string full of random char returned by the box above"
 # $ login_freebox "$MY_APP_ID" "$MY_APP_TOKEN"
 #
-# After authentication the session is holded by the box during few mins. You 
+# After authentication the session is holded by the box during few mins. You
 # can issue API command directly
 #
 # List the root of the box displaying connected and internal harddrive:
-# $ call_freebox_api 'fs/ls/' 
+# $ call_freebox_api 'fs/ls/'
 
 ### Config
 FREEBOX_URL="http://mafreebox.freebox.fr"
@@ -42,7 +42,7 @@ _API_VERSION=
 _API_BASE_URL=
 _SESSION_TOKEN=
 
-# can be modified here or in the external file auth.sh (not under source control) 
+# can be modified here or in the external file auth.sh (not under source control)
 SAVED_APP_ID=""
 SAVED_APP_TOKEN=""
 
@@ -73,7 +73,7 @@ do
 	if [[ "$path" != "" ]]
 	then
 		echo "$exe is in PATH"
-		# ${var^^} make it UPPERCASE bash 4
+		# ${var^^} make it UPPERCASE bash 4
 		eval "${exe^^}=$path"
 
 	else
@@ -85,7 +85,7 @@ do
 			curl -L "$url" > $path
 			chmod a+x $path
 			eval "${exe^^}=$path"
-		else 
+		else
 			# don't perform install but notice the user
 			echo "to install $exe use: $(echo "$url" | sed -e 's/==/ /g')"
 			eval "${exe^^}=''"
@@ -96,7 +96,7 @@ done
 # test the json parser
 if [[ "$JQ" == "" ]]
 then
-	echo some error no JSON parser found.
+	echo some error no JSON parser found.
 	return 1
 fi
 
@@ -104,7 +104,7 @@ fi
 
 # read the json for the key in $2, "$1" hold the full json string
 function get_json_value_for_key {
-	local r=$(echo "$1" | jq -r ".$2")	
+	local r=$(echo "$1" | jq -r ".$2")
 	if [[ "$r" == "null" ]]
 	then
 		echo ""
@@ -242,19 +242,19 @@ function fb_list_dl() {
 	count=$(jq '.result[].id' $DLCACHE | wc -l)
 
 	# this output is json compatible so it can be piped back into jq, .result[], .dowloads
-	jq "{ result: [ .result[] | 
+	jq "{ result: [ .result[] |
 		  { name,
 			size_MB : (.size / 1048576),
 			pct_compl : (.tx_pct / 100),
 			ratio : (.tx_bytes / .size),
 			stop_ratio : (.stop_ratio / 100),
-		    id, status, error 
+		    id, status, error
 		  }
 		  ],
 		downloads : $count }" \
 		$DLCACHE
 
-}  
+}
 
 # helper apply and rewrap the result with a .result[] selector
 function jq_filter_wrap() {
@@ -302,7 +302,7 @@ fb_ls() {
 
 	call_freebox_api fs/ls/$base64path > $LS_JSON
 	for d in $(jq -r '.result[].name' $LS_JSON)
-	do 
+	do
 		i=$(( $i + 1 ))
 		echo "$i:< $d >"
 		if [[ $d == '.' || $d == '..' ]]
@@ -316,7 +316,7 @@ fb_ls() {
 		jq_get type
 		#echo "type=$type"
 		if [[ $type == "dir" ]]
-		then 
+		then
 			jq_get path
 			lpath="$cache_dir/$(echo "$path" | base64 -d)"
 			#echo $lpath
@@ -363,7 +363,7 @@ fb_dl_check_file() {
 	fi
 
 	for id in $(jq -r '.result[] | .id' < $DLCACHE )
-	do 
+	do
 		base64path=$(jq -r ".result[] | select(.id == $id) | if .download_dir == \"$t\" then \"$t\" + (.name | @base64)  else .download_dir end" < $DLCACHE)
 
 		#echo "id=$id base64path=$base64path"
