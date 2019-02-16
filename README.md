@@ -1,12 +1,13 @@
-freeboxos-bash-api
-==================
+# freeboxos-bash-api
 
 Fork de : https://github.com/JrCs/freeboxos-bash-api
 
-Pour une traduction de la documentation en Français créer une Issue, SVP.
+Pour une traduction de cette documentation en Français créer une Issue, SVP.
 
 Ce fork ajoute de nouvelles fonctionnalités, et utilise un parser
-JSON différent [jq](http://stedolan.github.io/jq/manual/) au lieu de [JSON.sh](https://github.com/dominictarr/JSON.sh) qui était trop lent.
+JSON différent : [jq](http://stedolan.github.io/jq/manual/)
+
+`jq` remplace totalement [JSON.sh](https://github.com/dominictarr/JSON.sh) qui était trop lent.
 
 Vous pouvez piper le json dans `| jq .` pour un joli formatage du JSON.
 
@@ -35,8 +36,6 @@ Get the source:
 ```
 git clone this_repos_URL
 ```
-
-JSON bash parser references JQ : http://stedolan.github.io/jq/manual/
 
 ## Initialize your APP Grants on the freebox (once)
 
@@ -113,7 +112,7 @@ MY_APP_ID="MyWonderfull.app"
 MY_APP_TOKEN="4uZTLMMwSyiPB42tSCWLpSSZbXIYi+d+F32tVMx2j1p8oSUUk4Awr/OMZne4RRlY"
 ```
 
-#### *  login_freebox *app_id* *app_token*
+#### login_freebox *app_id* *app_token*
 It is used to log the application (you need the application token obtain from authorize_application function)
 ##### Example
 ```bash
@@ -129,22 +128,48 @@ source ./freeboxos_bash_api.sh
 login_freebox "$MY_APP_ID" "$MY_APP_TOKEN"
 ```
 
-#### *  call_freebox_api *api_path*
+#### call_freebox_api [DELETE|PUT] *api_path* [DATA]
 It is used to call a freebox API. The function will return a json string with an exit code of 0 if successfull. Otherwise it will return an empty string with an exit code of 1 and the reason of the error output to STDERR.
 You can find the list of all available api [here](http://dev.freebox.fr/sdk/os/#api-list)
+
+API call are shorted from what it can be viewed in the doc:
+
+`GET /api/v4/fs/ls/{path}` becomes `call_freebox_api /fs/ls/${base64_path}`
+
+etc.
+
+If you call it with *DELETE* or *PUT* you change the behavior of the HTTP method. 
+
+*DATA* can be JSON to send, if present, it become a *POST* HTTP call.
+
+`$answer` is modified at each call, a glocal variable storing the last JSON returned by the API.  
+
 ##### Example
 ```bash
-answer=$(call_freebox_api '/connection/xdsl')
+# $answer also contains what will be assigned in $json
+json=$(call_freebox_api '/connection/xdsl')
+
+# delete a torrent
+call_freebox_api DELETE '/downloads/1234'
+
+# restart a torrent
+call_freebox_api PUT "/downloads/$task_id" "{\"status\" : \"retry\"}"       
 ```
 
-#### *  get_json_value_for_key *json_string* *key*
+#### get_json_value_for_key *json_string* *key*
 This function will return the value for the *key* from the *json_string*
+
+This is a compatibility function kept from the fork.
+
 ##### Example
 ```bash
 value=$(get_json_value_for_key "$answer" 'result.down.maxrate')
+
+# can also be accomplished by `jq` directly, of course:
+value=$(jq '.result.down.maxrate'  <<< "$answer")
 ```
 
-#### *  dump_json_keys_values *json_string*
+#### dump_json_keys_values *json_string*
 This function will dump on stdout all the keys values pairs from the *json_string*
 ##### Example
 ```bash
@@ -171,7 +196,7 @@ result = {"type":rfc2684,"rate_down":40,"bytes_up":945912,"rate_up":0,"bandwidth
 
 bytes_down: 2726853</pre>
 
-#### *  reboot_freebox
+#### reboot_freebox
 This function will reboot your freebox. Return code will be 0 if the freebox is rebooting, 1 otherwise.
 The application must be granted to modify the setup of the freebox (from freebox web interface).
 ##### Example
@@ -179,22 +204,30 @@ The application must be granted to modify the setup of the freebox (from freebox
 reboot_freebox
 ```
 
-Available Commands
-------------------
+### Other available Commands
 
 ```bash
-fb_help : list all available commands
-fb_ls   : create ls_cache and list remote file with call_freebox_api 'fs/ls/'
-fb_list_dl : list download in json format caching the résult -f to force cache reload
+fb_dl_grep : list downloads matching a regexp pattern (JSON list)
+fb_ls      : create a directory cache_fs/ and list remote file with call_freebox_api 'fs/ls/'
+fb_list_dl : list download in json format caching the result (-f to force cache reload)
 ```
++ see Code.
 
-JQ hack
--------
+## JQ hack
 
-embedded grep: fisrt list names matching 'fred' and reselect the whole json result
+embedded grep: fisrt list names matching 'fred', then reselect the whole json result
 ```bash
 jq ".result[] | select(.name == $(jq '.result[] | .name '  < dl.json  | grep -i fred))" dl.json
 ```
+
+Better accomplished with actual `jq`:
+
+```bash
+pattern=fred
+fb_list_dl | \
+    jq -r "[ .result[]|select(.name|test(\"$pattern\")) ]"
+```
+
 
 finished downloads
 ```bash
