@@ -3,44 +3,90 @@ freeboxos-bash-api
 
 Fork de : https://github.com/JrCs/freeboxos-bash-api
 
-Une traduction de la documentation en Français sera disponible. Ce fork ajoute des fonctionnalités, et utilise un parser
-JSON différent [jq](http://stedolan.github.io/jq/manual/) au lieu de [JSON.sh](https://github.com/dominictarr/JSON.sh),
-pour des raisons de performances.
+Pour une traduction de la documentation en Français créer une Issue, SVP.
+
+Ce fork ajoute de nouvelles fonctionnalités, et utilise un parser
+JSON différent [jq](http://stedolan.github.io/jq/manual/) au lieu de [JSON.sh](https://github.com/dominictarr/JSON.sh) qui était trop lent.
 
 Vous pouvez piper le json dans `| jq .` pour un joli formatage du JSON.
 
-Regarder le code pour une version à jour de la doc…
+Désolé pour cette doc succinte, il faut lire le code...
 
-La documentation originale en Anglais :
+La documentation originale en Anglais + ajout des nouvelles commandes :
+
+=======================================================================
 
 
-Access [FreeboxOS API](http://dev.freebox.fr/sdk/os/#api-list) from bash
+Bash API for Freebox revoluion [FreeboxOS API](http://dev.freebox.fr/sdk/os/#api-list)
 
 Quick Start
 -----------
 
 You need to have `curl`, `openssl` and `jq` installed.
 
+on ubuntu/debian
+
+```
+sudo apt install curl openssl jq
+```
+
 Get the source:
 
-    $ curl -L http://github.com/JrCs/freeboxos-bash-api/raw/master/freeboxos_bash_api.sh > freeboxos_bash_api.sh
+```
+git clone this_repos_URL
+```
 
+JSON bash parser references JQ : http://stedolan.github.io/jq/manual/
 
-JQ : http://stedolan.github.io/jq/manual/
+## Initialize your APP Grants on the freebox (once)
+
+You may need to login to your freeboxos web interface and allow new app to register.
+
+At, Thu Feb 14 2019 it was:
+`Paramètres de la Freebox` > `Divers / Gestion des Accès` > `Paramètres` > `Applications : Permettre les nouvelles demandes d'association` *checked*
+
+From your terminal, request a new application association with the Freebox:
+
+(See bellow for API description `authorize_application`)
+
+```bash
+$ source ./freeboxos_bash_api.sh
+$ authorize_application  'MyWonderfull.app'  'Full description'  '1.0.0'  'computer_name'
+
+# Please grant/deny access to the app on the Freebox LCD...
+# Yes, walk to physically touch the ">" key "Oui" on the Freebox!
+#
+# Authorization granted
+
+# somethine like, will be displayed on the terminal
+# save that to a file: auth.sh
+SAVED_APP_ID="MyWonderfull.app"
+SAVED_APP_TOKEN="4uZTLMMwSyiPB42tSCWLpSSZbXIYi+d+F32tVMx2j1p8oSUUk4Awr/OMZne4RRlY"
+```
+
+On the FreeboxOS web:
+Still in `Gestion des Accès`, tab `Session`, you should see your new application with its privileges listed.
+
+Good, you can go on!
+
 
 Example
 -------
+
+Let's read some Data
+
 ```bash
 #!/bin/bash
 
-MY_APP_ID="MyWonderfull.app"
-MY_APP_TOKEN="4uZTLMMwSyiPB42tSCWLpSSZbXIYi+d+F32tVMx2j1p8oSUUk4Awr/OMZne4RRlY"
+# APP_ID and APP_TOKEN are those given by authorize_application
 
 # source the freeboxos-bash-api
 source ./freeboxos_bash_api.sh
 
+SAVED_APP_ID="MyWonderfull.app"
+SAVED_APP_TOKEN="4uZTLMMwSyiPB42tSCWLpSSZbXIYi+d+F32tVMx2j1p8oSUUk4Awr/OMZne4RRlY"
 # login
-login_freebox "$MY_APP_ID" "$MY_APP_TOKEN"
+login_freebox "$SAVED_APP_ID" "$SAVED_APP_TOKEN"
 
 # get xDSL data
 answer=$(call_freebox_api '/connection/xdsl')
@@ -54,7 +100,7 @@ echo "Max Upload xDSL rate: $up_max_rate kbit/s"
 API
 ---
 
-#### *  authorize_application *app_id* *app_name* *app_version* *device_name*
+#### authorize_application *app_id* *app_name* *app_version* *device_name*
 It is used to obtain a token to identify a new application (need to be done only once)
 ##### Example
 ```bash

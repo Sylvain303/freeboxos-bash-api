@@ -5,7 +5,7 @@
 #
 # Usage:
 #
-# ==== ### NOTE ### ==== >>>
+# ==== ### NOTE ### ====
 # The script will WRITE file in its own dir:
 # - auth.sh   : [DOESN'T WORK YET] after the authorize process, store SAVED_APP_ID and SAVED_APP_TOKEN
 # - resty     : a rest bash API downloaded bellow
@@ -16,7 +16,7 @@
 #
 # $ source ./freeboxos_bash_api.sh
 # $ authorize_application  'MyWonderfull.app'  \
-# 	'My Wonderfull App'  '1.0.0'  'xubuntu-laptop'
+#   'My Wonderfull App'  '1.0.0'  'xubuntu-laptop'
 #
 # After the registration store the MY_APP_ID and MY_APP_TOKEN outputed by the
 # registration process. It will be required to authenticate again.
@@ -60,59 +60,59 @@ RESTY=resty
 # a realy fast binary JSON parser
 JQ=jq
 
-script_dir=$(dirname $0)
-PATH=$PATH:$script_dir
+SCRIPT_DIR=$(dirname $(readlink -f $BASH_SOURCE))
+PATH=$PATH:$SCRIPT_DIR
 
 # loop over the subscript to download
 for cmd in $downloads
 do
-	url=${cmd%%::*}
-	exe=${cmd##*::}
-	#echo $cmd $url $exe
-	path=$(type -P "$exe")
-	if [[ "$path" != "" ]]
-	then
-		echo "$exe is in PATH"
-		# ${var^^} make it UPPERCASE bash 4
-		eval "${exe^^}=$path"
+  url=${cmd%%::*}
+  exe=${cmd##*::}
+  #echo $cmd $url $exe
+  path=$(type -P "$exe")
+  if [[ "$path" != "" ]]
+  then
+    echo "$exe is in PATH"
+    # ${var^^} make it UPPERCASE bash 4
+    eval "${exe^^}=$path"
 
-	else
-		echo "$exe is NOT in PATH"
-		if [[ $url =~ ^http ]]
-		then
-			echo "downloading url in '$script_dir' $url"
-			path=$script_dir/$exe
-			curl -L "$url" > $path
-			chmod a+x $path
-			eval "${exe^^}=$path"
-		else
-			# don't perform install but notice the user
-			echo "to install $exe use: $(echo "$url" | sed -e 's/==/ /g')"
-			eval "${exe^^}=''"
-		fi
-	fi
+  else
+    echo "$exe is NOT in PATH"
+    if [[ $url =~ ^http ]]
+    then
+      echo "downloading url in '$SCRIPT_DIR' $url"
+      path=$SCRIPT_DIR/$exe
+      curl -L "$url" > $path
+      chmod a+x $path
+      eval "${exe^^}=$path"
+    else
+      # don't perform install but notice the user
+      echo "to install $exe use: $(echo "$url" | sed -e 's/==/ /g')"
+      eval "${exe^^}=''"
+    fi
+  fi
 done
 
 # test the json parser
 if [[ "$JQ" == "" ]]
 then
-	echo some error no JSON parser found.
-	return 1
+  echo some error no JSON parser found.
+  return 1
 fi
 
 ######## FUNCTIONS ########
 
 # read the json for the key in $2, "$1" hold the full json string
 function get_json_value_for_key {
-	local r=$(echo "$1" | jq -r ".$2")
-	if [[ "$r" == "null" ]]
-	then
-		echo ""
-		return 1
-	fi
-	echo "$r"
-	# echo "debug:$2 = '$r'" >> log
-	return 0
+  local r=$(echo "$1" | jq -r ".$2")
+  if [[ "$r" == "null" ]]
+  then
+    echo ""
+    return 1
+  fi
+  echo "$r"
+  # echo "debug:$2 = '$r'" >> log
+  return 0
 }
 
 function _check_success {
@@ -132,12 +132,21 @@ function _check_freebox_api {
 
 # call API directly as specified in http://dev.freebox.fr/sdk/os/
 # global $answer is modified
+# Usage:
+#  call_freebox_api /downloads
+#  # POST
+#  call_freebox_api /downloads/${id}/trackers "$POST_JSON"
 function call_freebox_api {
+    local options=("")
+    if [[ $1 == "DELETE" || $1 == "PUT" ]] ; then
+      options+=(-X $1)
+      shift
+    fi
+
     local api_url="$1"
     local data="${2-}"
-    local options=("")
-	# remove mutltiple slashes
-	local url="${FREEBOX_URL}$(echo "${_API_BASE_URL}v${_API_VERSION}/$api_url" | sed 's@/\+@/@g')"
+    # remove mutltiple slashes
+    local url="${FREEBOX_URL}$(echo "${_API_BASE_URL}v${_API_VERSION}/$api_url" | sed 's@/\+@/@g')"
     [[ -n "$_SESSION_TOKEN" ]] && options+=(-H "X-Fbx-App-Auth: $_SESSION_TOKEN")
     [[ -n "$data" ]] && options+=(-d "$data")
     answer=$(curl -s "$url" "${options[@]}")
@@ -155,10 +164,10 @@ function login_freebox {
     local password=$(echo -n "$challenge" | openssl dgst -sha1 -hmac "$APP_TOKEN" | sed  's/^(stdin)= //')
     answer=$(call_freebox_api '/login/session/' "{\"app_id\":\"${APP_ID}\", \"password\":\"${password}\" }") || return 1
     _SESSION_TOKEN=$(get_json_value_for_key "$answer" "result.session_token")
-	echo "login successful"
-	echo "SESSION_TOKEN='$_SESSION_TOKEN'"
-	echo "resty_H='X-Fbx-App-Auth: $_SESSION_TOKEN'"
-	resty_H="X-Fbx-App-Auth: $_SESSION_TOKEN"
+    echo "login successful"
+    echo "SESSION_TOKEN='$_SESSION_TOKEN'"
+    echo "resty_H='X-Fbx-App-Auth: $_SESSION_TOKEN'"
+    resty_H="X-Fbx-App-Auth: $_SESSION_TOKEN"
 }
 
 function authorize_application {
@@ -183,9 +192,9 @@ function authorize_application {
     [[ "$status" != 'granted' ]] && return 1
     echo >&2
     cat <<EOF
-# TODO: Save it as auth.sh replace MY_ by SAVED_
-MY_APP_ID="$APP_ID"
-MY_APP_TOKEN="$app_token"
+# TODO: Save it as auth.sh (will be used automatically)
+SAVED_APP_ID="$APP_ID"
+SAVED_APP_TOKEN="$app_token"
 EOF
 }
 
@@ -195,29 +204,29 @@ EOF
 # local loged_in=$(get_json_value_for_key "$answer" "result.logged_in")
 jq_get()
 {
-	local varname=$1
-	if [[ "$1" =~ \. ]]
-	then
-		varname=${1##*.}
-	fi
-	eval "$varname=\"$(echo "$answer" | jq -r ".result | .$1")\""
+  local varname=$1
+  if [[ "$1" =~ \. ]]
+  then
+    varname=${1##*.}
+  fi
+  eval "$varname=\"$(echo "$answer" | jq -r ".result | .$1")\""
 }
 
 function fb_check_session() {
-	answer=$(call_freebox_api login/)
-	#local loged_in=$(get_json_value_for_key "$answer" "result.logged_in")
-	##echo loged_in=$loged_in
-	#unset loged_in
-	jq_get logged_in
-	echo logged_in?=$logged_in
-	if [[ "$logged_in" == "false" ]]
-	then
-		if [ -f $script_dir/auth.sh ]
-		then
-			source $script_dir/auth.sh
-		fi
-		login_freebox "$SAVED_APP_ID" "$SAVED_APP_TOKEN"
-	fi
+  answer=$(call_freebox_api login/)
+  #local loged_in=$(get_json_value_for_key "$answer" "result.logged_in")
+  ##echo loged_in=$loged_in
+  #unset loged_in
+  jq_get logged_in
+  echo logged_in?=$logged_in
+  if [[ "$logged_in" == "false" ]]
+  then
+    if [ -f $SCRIPT_DIR/auth.sh ]
+    then
+      source $SCRIPT_DIR/auth.sh
+    fi
+    login_freebox "$SAVED_APP_ID" "$SAVED_APP_TOKEN"
+  fi
 }
 
 ######## API free box tools  ########
@@ -226,39 +235,61 @@ function reboot_freebox {
     call_freebox_api '/system/reboot' '{}' >/dev/null
 }
 
-DLCACHE=$script_dir/dl.json
+DLCACHE=$SCRIPT_DIR/dl.json
 fb_dl_build_cache() {
-	call_freebox_api 'downloads/' | jq . > $DLCACHE
+  call_freebox_api 'downloads/' | jq . > $DLCACHE
 }
 
+# fb_list_dl: list all download as JSON ouput
+# It will store result in  a cache file $DLCACHE
+# JSON:
+# "{
+#     result: [
+#       {
+#         "name": "debian9.iso",
+#         "size_MB": 2164.8406982421875,
+#         "pct_compl": 5.58,
+#         "ratio": 0.3359603524229075,
+#         "stop_ratio": 6,
+#         "id": 1374,
+#         "status": "error",
+#         "error": "bt_tracker_error"
+#       },
+#       { ... }
+#    ],
+#    "downloads": 77
+#  }
+
+# downloads : $count }" \
 function fb_list_dl() {
-	#dlcache=$(mktemp fbtmp_XXXXX_dl.json)
-	if [ ! -f $DLCACHE -o "$1" == "-f" ]
-	then
-		echo "rebuild cache : api call downloads"
-		fb_dl_build_cache
-	fi
+  #dlcache=$(mktemp fbtmp_XXXXX_dl.json)
+  local msg="use cached result: $DLCACHE"
+  if [ ! -f $DLCACHE -o "$1" == "-f" ]
+  then
+    msg="rebuild cache : api call fb_dl_build_cache"
+    fb_dl_build_cache
+  fi
 
-	count=$(jq '.result[].id' $DLCACHE | wc -l)
+  local count=$(jq '.result[].id' $DLCACHE | wc -l)
 
-	# this output is json compatible so it can be piped back into jq, .result[], .dowloads
-	jq "{ result: [ .result[] |
-		  { name,
-			size_MB : (.size / 1048576),
-			pct_compl : (.tx_pct / 100),
-			ratio : (.tx_bytes / .size),
-			stop_ratio : (.stop_ratio / 100),
-		    id, status, error
-		  }
-		  ],
-		downloads : $count }" \
-		$DLCACHE
-
+  # this output is json compatible so it can be piped back into jq, .result[], .donwloads
+  jq "{ result: [ .result[] |
+      { name,
+      size_MB : (.size / 1048576),
+      pct_compl : (.tx_pct / 100),
+      ratio : (.tx_bytes / .size),
+      stop_ratio : (.stop_ratio / 100),
+        id, status, error
+      }
+      ],
+    msg: \"$msg\",
+    downloads : $count }" \
+    $DLCACHE
 }
 
 # helper apply and rewrap the result with a .result[] selector
 function jq_filter_wrap() {
-	jq "{result: [ .result[] | $1 ] }"
+  jq "{result: [ .result[] | $1 ] }"
 }
 
 # ###################### ====>  useful jq combo <=================== ###################
@@ -266,140 +297,166 @@ function jq_filter_wrap() {
 # list download_dir or cat path : jq -r '.result[] | if .download_dir == "L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv" then "L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv" + (.name | @base64)  else .download_dir end' < dl.json
 
 function fb_dl_grep() {
-	# grep inside the downloads
-	local r=$(jq '.result[] | .name ' < $DLCACHE  | grep -i "$1")
-	if [[ "$r" == "" ]]
-	then
-		echo "not found: '$1'"
-	else
-		fb_list_dl | jq ".result[] | select(.name == $r)"
-	fi
+  # grep inside the downloads
+  local r=$(jq '.result[] | .name ' < $DLCACHE  | grep -i "$1")
+  if [[ "$r" == "" ]]
+  then
+    echo "not found: '$1'"
+  else
+    fb_list_dl | jq ".result[] | select(.name == $r)"
+  fi
 }
 
 fb_ls() {
-	# cache_dir is a folder tree stored localy to allow bash file name completion
-	# each dir as a .path file storing it base64 freebox path
-	cache_dir=$script_dir/cache_fs
-	LS_JSON=$script_dir/ls.json
-	[ ! -d $cache_dir ] && mkdir $cache_dir
+  # $cache_dir is a folder tree stored localy to allow bash file name completion
+  # each dir as a .path file storing it base64 freebox path
+  cache_dir=$SCRIPT_DIR/cache_fs
+  LS_JSON=$SCRIPT_DIR/ls.json
+  [ ! -d $cache_dir ] && mkdir $cache_dir
 
-	# split on newline only
-	OLDIFS=$IFS
-	IFS=$'\n'
-	i=-1
+  # split on newline only
+  OLDIFS=$IFS
+  IFS=$'\n'
+  i=-1
 
-	local base64path=''
-	if [[ "$1" != "" ]]
-	then
-		if [ -d "$1" ]
-		then
-			base64path=$(cat "$1/.path")
-			echo "base64path=$base64path"
-		else
-			base64path=$1
-		fi
-	fi
+  local base64path=''
+  if [[ "$1" != "" ]]
+  then
+    if [ -d "$1" ]
+    then
+      base64path=$(cat "$1/.path")
+      echo "base64path=$base64path"
+    else
+      base64path=$1
+    fi
+  fi
 
-	call_freebox_api fs/ls/$base64path > $LS_JSON
-	for d in $(jq -r '.result[].name' $LS_JSON)
-	do
-		i=$(( $i + 1 ))
-		echo "$i:< $d >"
-		if [[ $d == '.' || $d == '..' ]]
-		then
-			continue
-		fi
+  call_freebox_api fs/ls/$base64path > $LS_JSON
+  for d in $(jq -r '.result[].name' $LS_JSON)
+  do
+    i=$(( $i + 1 ))
+    echo "$i:< $d >"
+    if [[ $d == '.' || $d == '..' ]]
+    then
+      continue
+    fi
 
-		# extract the json for the folder with prefix .result
-		answer=$(jq "{result : .result[$i] }" $LS_JSON)
+    # extract the json for the folder with prefix .result
+    answer=$(jq "{result : .result[$i] }" $LS_JSON)
 
-		jq_get type
-		#echo "type=$type"
-		if [[ $type == "dir" ]]
-		then
-			jq_get path
-			lpath="$cache_dir/$(echo "$path" | base64 -d)"
-			#echo $lpath
-			mkdir -p "$lpath"
-			echo "$path" > "$lpath/.path"
-		fi
-	done
+    jq_get type
+    #echo "type=$type"
+    if [[ $type == "dir" ]]
+    then
+      jq_get path
+      lpath="$cache_dir/$(echo "$path" | base64 -d)"
+      #echo $lpath
+      mkdir -p "$lpath"
+      echo "$path" > "$lpath/.path"
+    fi
+  done
 
-	IFS=$OLDIFS
+  IFS=$OLDIFS
 }
 
 fb_get_dl_hash() {
-	jq -r ".result[] | select(.id == $1) | .download_dir" < $DLCACHE
+  jq -r ".result[] | select(.id == $1) | .download_dir" < $DLCACHE
 }
 
 fb_test_file() {
-	local base64path=''
-	if [[ "$1" == "-b" ]]
-	then
-		base64path="$2"
-	# # following test detects base64 but it involves 2 subcommands
-	# elif [[ $(echo "$1" | base64 -d | base64 -w0) == "$1" ]]
-	# then
-	# 	base64path="$1"
-	else
-		base64path=$(echo -n "$1" | base64 -w0)
-	fi
-	answer=$(call_freebox_api fs/info/$base64path)
+  local base64path=''
+  if [[ "$1" == "-b" ]]
+  then
+    base64path="$2"
+  # # following test detects base64 but it involves 2 subcommands
+  # elif [[ $(echo "$1" | base64 -d | base64 -w0) == "$1" ]]
+  # then
+  #   base64path="$1"
+  else
+    base64path=$(echo -n "$1" | base64 -w0)
+  fi
+  answer=$(call_freebox_api fs/info/$base64path)
 }
 
 fb_dl_check_file() {
-	# encoded base64 /Disque dur/Téléchargements
-	local t=L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv
-	local tot=0
-	local ok=0
-	local delete=false
+  # encoded base64 /Disque dur/Téléchargements
+  local t=L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv
+  local tot=0
+  local ok=0
+  local delete=false
 
-	fb_dl_build_cache
+  fb_dl_build_cache
 
-	if [[ "$1" == "--delete" ]]
-	then
-		delete=true
-		shift
-	fi
+  if [[ "$1" == "--delete" ]]
+  then
+    delete=true
+    shift
+  fi
 
-	for id in $(jq -r '.result[] | .id' < $DLCACHE )
-	do
-		base64path=$(jq -r ".result[] | select(.id == $id) | if .download_dir == \"$t\" then \"$t\" + (.name | @base64)  else .download_dir end" < $DLCACHE)
+  for id in $(jq -r '.result[] | .id' < $DLCACHE )
+  do
+    base64path=$(jq -r ".result[] | select(.id == $id) | if .download_dir == \"$t\" then \"$t\" + (.name | @base64)  else .download_dir end" < $DLCACHE)
 
-		#echo "id=$id base64path=$base64path"
-		tot=$(($tot + 1))
+    #echo "id=$id base64path=$base64path"
+    tot=$(($tot + 1))
 
-		if ! fb_test_file -b "$base64path" 2> /dev/null
-		then
-			# it is not always true because some filename are wrong
-			# lets try the same path but the interal filename
-			answer=$(call_freebox_api downloads/$id/files)
-			jq_get '[0].name'
-			if [[ "$name" == "" ]]
-			then
-				echo "$answer" | jq .
-				return 1
-			fi
-			fullpath=$(echo -n "$base64path" | base64 -d)
-			test_fname="$(dirname "$fullpath")/$name"
-			if ! fb_test_file "$test_fname" 2> /dev/null
-			then
-				echo "id:$id not found: '$fullpath'"
-				echo "test_fname=$test_fname"
+    if ! fb_test_file -b "$base64path" 2> /dev/null
+    then
+      # it is not always true because some filename are wrong
+      # lets try the same path but the internal filename
+      answer=$(call_freebox_api downloads/$id/files)
+      jq_get '[0].name'
+      if [[ "$name" == "" ]]
+      then
+        echo "$answer" | jq .
+        return 1
+      fi
+      fullpath=$(echo -n "$base64path" | base64 -d)
+      test_fname="$(dirname "$fullpath")/$name"
+      if ! fb_test_file "$test_fname" 2> /dev/null
+      then
+        echo "id:$id not found: '$fullpath'"
+        echo "test_fname=$test_fname"
 
-				if $delete
-				then
-					DELETE ${_API_BASE_URL}v${_API_VERSION}/downloads/$id/erase
-				fi
-			else
-				ok=$(($ok + 1))
-			fi
-		else
-			ok=$(($ok + 1))
-		fi
-	done
+        if $delete
+        then
+          DELETE ${_API_BASE_URL}v${_API_VERSION}/downloads/$id/erase
+        fi
+      else
+        ok=$(($ok + 1))
+      fi
+    else
+      ok=$(($ok + 1))
+    fi
+  done
 
-	echo "ok=$ok/$tot"
+  echo "ok=$ok/$tot"
+}
+
+url_encode() {
+  echo "$1"|sed 's/%/%25/g
+s/\[/%5B/g
+s/\]/%5D/g
+s/|/%7C/g
+s/\$/%24/g
+s/&/%26/g
+s/+/%2B/g
+s/,/%2C/g
+s/:/%3A/g
+s/;/%3B/g
+s/=/%3D/g
+s/?/%3F/g
+s/@/%40/g
+s/ /%20/g
+s/#/%23/g
+s/{/%7B/g
+s/}/%7D/g
+s/\\/%5C/g
+s/\^/%5E/g
+s/~/%7E/g
+s/`/%60/g
+s/\//%2F/g
+'
 }
 
 ######## MAIN ########
