@@ -298,13 +298,8 @@ function jq_filter_wrap() {
 
 function fb_dl_grep() {
   # grep inside the downloads
-  local r=$(jq '.result[] | .name ' < $DLCACHE  | grep -i "$1")
-  if [[ "$r" == "" ]]
-  then
-    echo "not found: '$1'"
-  else
-    fb_list_dl | jq ".result[] | select(.name == $r)"
-  fi
+  fb_list_dl | \
+    jq -r "[ .result[]|select(.name|test(\"$1\")) ]"
 }
 
 fb_ls() {
@@ -378,6 +373,7 @@ fb_test_file() {
   answer=$(call_freebox_api fs/info/$base64path)
 }
 
+## WARNING: the is a draft and may delete all your torrent
 fb_dl_check_file() {
   # encoded base64 /Disque dur/Téléchargements
   local t=L0Rpc3F1ZSBkdXIvVMOpbMOpY2hhcmdlbWVudHMv
