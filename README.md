@@ -1,5 +1,9 @@
 # freeboxos-bash-api
 
+**Status:** Working draft
+
+## Description
+
 Fork de : https://github.com/JrCs/freeboxos-bash-api
 
 Pour une traduction de cette documentation en Français créer une Issue, SVP.
@@ -12,6 +16,37 @@ JSON différent : [jq](http://stedolan.github.io/jq/manual/)
 Vous pouvez piper le json dans `| jq .` pour un joli formatage du JSON.
 
 Désolé pour cette doc succinte, il faut lire le code...
+
+## Pourquoi faire ça en bash ? 
+Ben, ça existait déjà, et du coup on peut le faire en interactif dans le shell:
+
+```bash
+$ . freeboxos_bash_api.sh 
+resty is in PATH
+jq is in PATH
+logged_in?=false
+login successful
+SESSION_TOKEN='secret_token_here'
+resty_H='X-Fbx-App-Auth: secret_token_here'
+http://mafreebox.freebox.fr*
+
+$ fb_ls
+0:< . >
+1:< .. >
+2:< Disque dur >
+
+# oui, la complétion bash fonctionne ! car il y un cache des dossiers en local.
+$ fb_ls ./cache_fs/Disque\ dur/
+base64path=L0Rpc3F1ZSBkdXI=
+0:< . >
+1:< .. >
+2:< Enregistrements >
+3:< Musiques >
+4:< Photos >
+5:< Téléchargements >
+6:< Vidéos >
+```
+
 
 La documentation originale en Anglais + ajout des nouvelles commandes :
 
@@ -57,7 +92,7 @@ $ authorize_application  'MyWonderfull.app'  'Full description'  '1.0.0'  'compu
 #
 # Authorization granted
 
-# somethine like, will be displayed on the terminal
+# something like, will be displayed on the terminal
 # save that to a file: auth.sh
 SAVED_APP_ID="MyWonderfull.app"
 SAVED_APP_TOKEN="4uZTLMMwSyiPB42tSCWLpSSZbXIYi+d+F32tVMx2j1p8oSUUk4Awr/OMZne4RRlY"
